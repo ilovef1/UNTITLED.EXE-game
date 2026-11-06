@@ -1,0 +1,496 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UNTITLED.EXE</title>
+<meta name="description" content="Explore Happy Town in UNTITLED.EXE, a retro 3D comedy horror adventure.">
+<meta name="google-site-verification" content="XTbpK3ETJSJoGg_VQFA-pzxVYYVj2Kav2vDOLqyEezo">
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+* { box-sizing:border-box; }
+body {
+  margin:0;
+  overflow:hidden;
+  background:#111;
+  color:white;
+  font-family:'Press Start 2P',monospace;
+}
+canvas { display:block; image-rendering:pixelated; }
+#topbar {
+  position:absolute; z-index:3; top:0; width:100%;
+  padding:17px; display:flex; justify-content:space-between;
+  background:#0009; font-size:10px; pointer-events:none;
+}
+#location { color:#ffe36e; }
+#crosshair {
+  position:absolute; z-index:3; left:50%; top:50%;
+  transform:translate(-50%,-50%); pointer-events:none;
+}
+#hud {
+  position:absolute; z-index:3; bottom:15px; left:15px; right:15px;
+  padding:14px; background:#000b; border:2px solid white;
+  font-size:9px; line-height:2.2; pointer-events:none;
+}
+#objective { color:#ffe36e; }
+#controls { color:#bbb; font-size:8px; }
+#dialogue {
+  position:absolute; z-index:5; bottom:105px; left:50%;
+  transform:translateX(-50%); width:min(700px,92%);
+  padding:20px; background:#17152a; border:4px solid white;
+  box-shadow:7px 7px #000; font-size:10px; line-height:2;
+}
+#speaker { color:#ffe36e; margin-bottom:12px; }
+.hint { text-align:right; color:#aaa; font-size:8px; margin-top:12px; }
+.hidden { display:none !important; }
+.overlay {
+  position:absolute; z-index:10; inset:0; display:flex;
+  align-items:center; justify-content:center; text-align:center;
+  background:#080812f2;
+}
+.panel { padding:25px; max-width:650px; }
+h1 {
+  font-size:clamp(24px,6vw,55px);
+  text-shadow:5px 5px #e44b73;
+}
+h1 span { color:#ff547c; }
+.small { font-size:8px; color:#aaa; line-height:2; }
+button {
+  border:3px solid white; padding:16px 22px;
+  background:#ff547c; color:white;
+  font-family:inherit; font-size:10px; cursor:pointer;
+  box-shadow:5px 5px #000; margin:8px;
+}
+button:hover { background:#c72e58; }
+#photo .panel {
+  width:min(430px,92%); padding:20px;
+  background:#eee6ca; color:#222; border:8px solid white;
+}
+#photoScene {
+  height:220px; position:relative; overflow:hidden;
+  background:linear-gradient(#83d9ef 0 55%,#8acb79 55%);
+  border:4px solid #333;
+}
+#photoScene .sun { position:absolute; right:25px; top:15px; font-size:35px; }
+#photoScene .townSmile {
+  position:absolute; left:43%; top:30%; font-size:75px;
+  color:#222; text-shadow:0 0 12px red;
+}
+#photoScene .caption { position:absolute; bottom:12px; width:100%; font-size:9px; }
+#photoWarning { color:#b52238; font-size:10px; margin:15px; }
+#ending { flex-direction:column; }
+#ending h1 { color:#ff547c; }
+#ending p { font-size:10px; line-height:2; }
+@media(max-width:600px) {
+  #topbar { font-size:7px; }
+  #hud { font-size:7px; }
+  #controls { font-size:6px; }
+  #dialogue { font-size:8px; }
+}
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+</head>
+
+<body>
+<div id="topbar">
+  <span>UNTITLED.EXE</span>
+  <span id="location">HAPPY TOWN</span>
+</div>
+<div id="crosshair">+</div>
+
+<div id="hud">
+  <div>OBJECTIVE: <span id="objective">Talk to the townspeople</span></div>
+  <div id="controls">WASD: Move · SPACE: Jump · E: Interact · Mouse: Look</div>
+</div>
+
+<div id="dialogue" class="hidden">
+  <div id="speaker">TOWNSPERSON</div>
+  <div id="dialogueText">Hello there!</div>
+  <div class="hint">PRESS E TO CONTINUE</div>
+</div>
+
+<div id="photo" class="overlay hidden">
+  <div class="panel">
+    <p style="font-size:9px">A NICE DAY IN HAPPY TOWN</p>
+    <div id="photoScene">
+      <span class="sun">☀</span>
+      <span class="townSmile">☺</span>
+      <span class="caption">EVERYONE IS HAPPY.</span>
+    </div>
+    <div id="photoWarning">WAIT... WHO IS THAT?</div>
+    <button id="closePhoto">CLOSE PHOTO</button>
+  </div>
+</div>
+
+<div id="startScreen" class="overlay">
+  <div class="panel">
+    <div class="small">A VERY NORMAL LITTLE ADVENTURE</div>
+    <h1>UNTITLED<span>.EXE</span></h1>
+    <p style="font-size:11px;color:#ffe36e">WELCOME TO HAPPY TOWN!</p>
+    <button id="startButton">START GAME</button>
+    <div class="small">HEADPHONES RECOMMENDED · PROBABLY.</div>
+  </div>
+</div>
+
+<div id="ending" class="overlay hidden">
+  <div class="panel">
+    <h1>CONNECTION LOST</h1>
+    <p>SMILE.exe is still here.</p>
+    <button id="restartButton">RESTART</button>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+const $ = id => document.getElementById(id);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8edcf0);
+scene.fog = new THREE.Fog(0x8edcf0,30,90);
+
+const camera = new THREE.PerspectiveCamera(
+  70, innerWidth/innerHeight, 0.1, 150
+);
+const renderer = new THREE.WebGLRenderer({antialias:false});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x65744d,2));
+const sun = new THREE.DirectionalLight(0xffffff,2);
+sun.position.set(-10,20,10);
+sun.castShadow = true;
+scene.add(sun);
+
+const mat = color => new THREE.MeshStandardMaterial({color});
+function cube(x,y,z,sx,sy,sz,color) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),mat(color));
+  m.position.set(x,y,z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  scene.add(m);
+  return m;
+}
+
+// HAPPY TOWN
+cube(0,-0.6,0,100,1,100,0x72b76a);
+cube(0,-0.08,0,8,0.1,100,0x777777);
+cube(0,-0.07,0,100,0.1,8,0x777777);
+
+const buildingColors = [0xffc66d,0xf58b9d,0x8ec7ef,0xb9e39a];
+for(let i=0;i<14;i++){
+  const x=(i%7)*13-39;
+  const z=Math.floor(i/7)*20-27;
+  const h=5+Math.random()*3;
+  cube(x,h/2,z,7,h,7,buildingColors[i%4]);
+  cube(x,h+0.3,z,7.5,0.5,7.5,0xffffff);
+  for(let w=-1;w<=1;w++)
+    cube(x+w*2,2,z+3.56,0.9,1.2,0.1,0x4b7190);
+}
+
+for(let i=0;i<24;i++){
+  const x=Math.random()*75-37;
+  const z=Math.random()*75-37;
+  if(Math.abs(x)<7 || Math.abs(z)<7) continue;
+  cube(x,1,z,0.7,2,0.7,0x80532e);
+  const leaves=new THREE.Mesh(
+    new THREE.IcosahedronGeometry(1.7,0),mat(0x3d9b53)
+  );
+  leaves.position.set(x,3,z);
+  scene.add(leaves);
+}
+
+// BOBO
+const player = new THREE.Group();
+const body = new THREE.Mesh(new THREE.BoxGeometry(.9,1.2,.55),mat(0x3159b8));
+body.position.y=1.1;
+player.add(body);
+const head = new THREE.Mesh(new THREE.BoxGeometry(.8,.8,.8),mat(0xffd2a1));
+head.position.y=2.1;
+player.add(head);
+const hair = new THREE.Mesh(new THREE.BoxGeometry(.85,.25,.85),mat(0x39251d));
+hair.position.y=2.55;
+player.add(hair);
+player.position.set(0,0,5);
+scene.add(player);
+
+// PIXEL NPC TEXTURES ARE CREATED INSIDE THIS FILE
+function npcTexture(color,accent){
+  const c=document.createElement('canvas');
+  c.width=64;c.height=64;
+  const ctx=c.getContext('2d');
+  ctx.imageSmoothingEnabled=false;
+  ctx.fillStyle='#49302a';ctx.fillRect(18,5,28,12);
+  ctx.fillStyle='#ffd0a0';ctx.fillRect(16,14,32,24);
+  ctx.fillStyle='#191919';
+  ctx.fillRect(23,22,4,4);ctx.fillRect(37,22,4,4);
+  ctx.fillStyle='#9a3344';ctx.fillRect(27,31,12,3);
+  ctx.fillStyle=color;ctx.fillRect(12,39,40,23);
+  ctx.fillStyle='#292929';
+  ctx.fillRect(14,59,14,5);ctx.fillRect(37,59,14,5);
+  ctx.fillStyle=accent;ctx.fillRect(43,40,5,5);
+  const t=new THREE.CanvasTexture(c);
+  t.magFilter=THREE.NearestFilter;
+  t.minFilter=THREE.NearestFilter;
+  return t;
+}
+
+const npcData=[
+  {name:'MILO',color:'#f4a340',accent:'#fff',x:-5,z:1,
+   lines:['Hey! Welcome to Happy Town!','The weather is always perfect here.','Well... almost always.']},
+  {name:'LULU',color:'#d65c9c',accent:'#fff36b',x:5,z:-4,
+   lines:['Have you met everyone yet?','The mayor says we are all very happy.','Why is he always watching the clock?']},
+  {name:'MAYOR BEEP',color:'#4c9cdb',accent:'#fff',x:-8,z:-8,
+   lines:['WELCOME, CITIZEN!','Your happiness rating is: EXCELLENT.','Please do not question the photograph.']},
+  {name:'PIP',color:'#71b96c',accent:'#fff',x:8,z:7,
+   lines:['I saw something strange yesterday.','It was smiling at the wall.','But the wall was smiling back.']}
+];
+
+const npcs=[];
+for(const data of npcData){
+  const sprite=new THREE.Mesh(
+    new THREE.PlaneGeometry(2.2,2.2),
+    new THREE.MeshBasicMaterial({
+      map:npcTexture(data.color,data.accent),
+      transparent:true,side:THREE.DoubleSide
+    })
+  );
+  sprite.position.set(data.x,1.1,data.z);
+  scene.add(sprite);
+  npcs.push({...data,mesh:sprite,talked:false});
+}
+
+// NPCs occasionally talk to each other
+const ambientTalk=[
+  ['MILO','LULU:','Did you hear that noise?'],
+  ['LULU','MILO:','Nope! Must be the wind!'],
+  ['PIP','MAYOR BEEP:','Is that thing in the photo new?'],
+  ['MAYOR BEEP','PIP:','There is no thing in the photo.']
+];
+
+// CAMERA PROP
+const cameraProp=cube(3,.8,4,.5,.35,.25,0x222222);
+
+// SMILE.exe
+const smile=new THREE.Group();
+const smileHead=new THREE.Mesh(
+  new THREE.BoxGeometry(1.5,1.5,1.1),
+  new THREE.MeshStandardMaterial({color:0xe8e4d0,roughness:.9})
+);
+smileHead.position.y=2.2;
+smile.add(smileHead);
+
+for(const x of [-.35,.35]){
+  const eye=new THREE.Mesh(
+    new THREE.BoxGeometry(.15,.25,.08),mat(0x111111)
+  );
+  eye.position.set(x,2.35,.57);
+  smile.add(eye);
+}
+const mouth=new THREE.Mesh(
+  new THREE.BoxGeometry(.65,.12,.08),mat(0x9d1f34)
+);
+mouth.position.set(0,1.95,.58);
+smile.add(mouth);
+const smileBody=new THREE.Mesh(
+  new THREE.BoxGeometry(1.1,1.5,.8),mat(0xbac4c6)
+);
+smileBody.position.y=.8;
+smile.add(smileBody);
+smile.position.set(0,0,-22);
+smile.visible=false;
+scene.add(smile);
+
+// GAME STATE
+let started=false;
+let photoSeen=false;
+let chase=false;
+let currentNPC=null;
+let lineIndex=0;
+let nearbyNPC=null;
+let yaw=0;
+let jumpVelocity=0;
+let onGround=true;
+const keys={};
+
+window.addEventListener('keydown',e=>{
+  keys[e.key.toLowerCase()]=true;
+
+  if(e.code==='Space'){
+    e.preventDefault();
+    if(started && onGround && !currentNPC && $('photo').classList.contains('hidden')){
+      jumpVelocity=8;
+      onGround=false;
+    }
+  }
+
+  if(e.key.toLowerCase()==='e' && started){
+    if(!$('photo').classList.contains('hidden')) closePhoto();
+    else if(currentNPC) advanceDialogue();
+    else if(nearbyNPC) beginDialogue(nearbyNPC);
+  }
+});
+window.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+
+renderer.domElement.addEventListener('click',()=>{
+  if(started) renderer.domElement.requestPointerLock?.();
+});
+document.addEventListener('mousemove',e=>{
+  if(document.pointerLockElement===renderer.domElement && started)
+    yaw-=e.movementX*.0025;
+});
+
+function beginDialogue(npc){
+  currentNPC=npc;
+  npc.talked=true;
+  lineIndex=0;
+  showDialogue();
+}
+function showDialogue(){
+  $('speaker').textContent=currentNPC.name;
+  $('dialogueText').textContent=currentNPC.lines[lineIndex];
+  $('dialogue').classList.remove('hidden');
+}
+function advanceDialogue(){
+  lineIndex++;
+  if(lineIndex>=currentNPC.lines.length){
+    $('dialogue').classList.add('hidden');
+    currentNPC=null;
+    if(npcs.every(n=>n.talked))
+      $('objective').textContent='Inspect the camera near the road';
+  } else showDialogue();
+}
+
+function openPhoto(){
+  photoSeen=true;
+  $('photo').classList.remove('hidden');
+  $('objective').textContent='Something is wrong...';
+  smile.visible=true;
+  $('location').textContent='UNKNOWN LOCATION';
+}
+function closePhoto(){
+  $('photo').classList.add('hidden');
+  $('objective').textContent='GET BACK TO THE TOWN SQUARE';
+  chase=true;
+  smile.position.set(player.position.x+2,0,player.position.z-12);
+}
+$('closePhoto').addEventListener('click',closePhoto);
+
+function updateNearby(){
+  nearbyNPC=null;
+  let nearest=3;
+  for(const npc of npcs){
+    npc.mesh.lookAt(camera.position);
+    const d=player.position.distanceTo(new THREE.Vector3(npc.x,0,npc.z));
+    if(d<nearest){nearest=d;nearbyNPC=npc;}
+  }
+  const cameraDistance=player.position.distanceTo(new THREE.Vector3(3,0,4));
+  if(cameraDistance<2 && !photoSeen && npcs.every(n=>n.talked))
+    openPhoto();
+}
+
+function updatePlayer(dt){
+  if(!started || currentNPC || !$('photo').classList.contains('hidden')) return;
+
+  const forward=new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
+  const right=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+  const dir=new THREE.Vector3();
+
+  if(keys.w)dir.add(forward);
+  if(keys.s)dir.sub(forward);
+  if(keys.a)dir.sub(right);
+  if(keys.d)dir.add(right);
+
+  if(dir.length()>0){
+    dir.normalize();
+    player.position.addScaledVector(dir,6*dt);
+  }
+
+  jumpVelocity-=20*dt;
+  player.position.y+=jumpVelocity*dt;
+  if(player.position.y<=0){
+    player.position.y=0;
+    jumpVelocity=0;
+    onGround=true;
+  }
+
+  player.position.x=THREE.MathUtils.clamp(player.position.x,-45,45);
+  player.position.z=THREE.MathUtils.clamp(player.position.z,-45,45);
+}
+
+function updateCamera(dt){
+  const target=new THREE.Vector3(
+    player.position.x+Math.sin(yaw)*7,
+    player.position.y+4,
+    player.position.z+Math.cos(yaw)*7
+  );
+  camera.position.lerp(target,Math.min(dt*6,1));
+  const look=player.position.clone();
+  look.y+=1.5;
+  camera.lookAt(look);
+}
+
+function updateSmile(dt){
+  if(!chase || !smile.visible)return;
+  const dir=new THREE.Vector3().subVectors(player.position,smile.position);
+  dir.y=0;
+  const distance=dir.length();
+
+  if(distance>2.8){
+    dir.normalize();
+    smile.position.addScaledVector(dir,dt*1.6);
+  }
+  smile.lookAt(player.position.x,0,player.position.z);
+
+  if(distance<3){
+    $('ending').classList.remove('hidden');
+    started=false;
+    document.exitPointerLock?.();
+  }
+}
+
+$('startButton').addEventListener('click',()=>{
+  started=true;
+  $('startScreen').classList.add('hidden');
+  $('objective').textContent='Talk to the townspeople';
+});
+$('restartButton').addEventListener('click',()=>location.reload());
+
+const clock=new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.05);
+
+  if(started){
+    updatePlayer(dt);
+    updateCamera(dt);
+    updateNearby();
+    updateSmile(dt);
+  }
+  renderer.render(scene,camera);
+}
+camera.position.set(0,4,12);
+camera.lookAt(0,1,0);
+animate();
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
+</body>
+</html>
